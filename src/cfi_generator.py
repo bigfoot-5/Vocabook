@@ -74,3 +74,29 @@ def calculate_cfi(soup, target_text):
     end_offset = start_offset + len(target_text)
     
     return path_str, None, (start_offset, end_offset)
+
+def get_element_cfi(element):
+    """
+    Generates the CFI path for a specific element (e.g. paragraph).
+    Returns path string like '/2/4/6'.
+    """
+    if not element: return None
+    
+    path_steps = []
+    current = element
+    
+    # We build path upwards
+    while current.parent:
+        parent = current.parent
+        if parent.name == '[document]':
+            path_steps.append("2")
+            break
+            
+        idx = get_node_index(current)
+        if idx is not None:
+            path_steps.append(str(idx))
+            
+        current = parent
+    
+    path_steps.reverse()
+    return "/" + "/".join(path_steps)

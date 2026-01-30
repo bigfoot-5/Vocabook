@@ -61,3 +61,27 @@ class CalibreDB:
             print(f"Database error: {e}")
         finally:
             conn.close()
+
+    def get_start_annotation(self, book_id, note_text="Start Here"):
+        """
+        Finds the first annotation that contains the specific note text.
+        Returns (spine_index, start_cfi) or (None, None).
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # We need to fetch all highlights and check 'notes' field in JSON
+        cursor.execute("SELECT annot_data FROM annotations WHERE book=? AND annot_type='highlight'", (book_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        for row in rows:
+            try:
+                data = json.loads(row[0])
+                if data.get('notes') == note_text:
+                    # Found it!
+                    return data.get('spine_index'), data.get('start_cfi')
+            except:
+                continue
+                
+        return None, None

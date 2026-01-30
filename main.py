@@ -6,7 +6,7 @@ from ebooklib import epub
 
 from src.calibre_db import CalibreDB
 from src.epub_utils import EpubManager
-from src.cfi_generator import calculate_cfi
+from src.cfi_generator import calculate_cfi, get_element_cfi
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -66,12 +66,26 @@ def main():
     except Exception as e:
         print(f"Failed to create backup: {e}")
         return
-
-    # --- REWRITE WORKFLOW ---
-    print("\n--- Rewrite Workflow ---")
     try:
+        # 1. Get "Start Here" location
+        print("Checking for 'Start Here' annotation...")
+        start_spine_index, start_cfi_raw = db.get_start_annotation(BOOK_ID, "Start Here")
+        
+        start_cfi_tuple = None
+        if start_spine_index is not None and start_cfi_raw:
+            print(f"Found 'Start Here' at Chapter Index {start_spine_index}, CFI: {start_cfi_raw}")
+            # Parse CFI string to tuple for comparison (e.g. "/2/4/6:0" -> (2, 4, 6))
+            # 1. Remove offset part
+            path_only = start_cfi_raw.split(':')[0]
+            # 2. Split by slash, filter empty
+            parts = [int(x) for x in path_only.split('/') if x.isdigit()]
+            start_cfi_tuple = tuple(parts)
+        else:
+            print("No 'Start Here' note found. Processing from beginning.")
+            start_spine_index = -1 
+
         pages_to_process = 5 # Default limit or prompt user
-        print(f"Processing first {pages_to_process} HTML items...")
+        print(f"Processing first {pages_to_process} HTML items (subject to filter)...")
         
         # Collect text chunks
         chunks = []
@@ -83,6 +97,10 @@ def main():
         
         count = 0
         for i, (item_id, linear) in enumerate(book.spine):
+            # 1. Global skip for previous chapters
+            if i < start_spine_index:
+                continue
+                
             if count >= pages_to_process: break
             
             item = book.get_item_with_id(item_id)
@@ -94,10 +112,25 @@ def main():
             
             # Simple chunking by paragraphs for this demo
             paragraphs = [p for p in soup.find_all('p') if p.get_text().strip()]
+            
+            skipped_count = 0
             for p_idx, p in enumerate(paragraphs):
+                 # Filter check: "Start Here" logic
+                 if i == start_spine_index and start_cfi_tuple:
+                     p_path = get_element_cfi(p)
+                     if p_path:
+                         p_parts = [int(x) for x in p_path.split('/') if x.isdigit()]
+                         p_tuple = tuple(p_parts)
+                         if p_tuple < start_cfi_tuple:
+                             skipped_count += 1
+                             continue
+
                  # Store metadata to find specific paragraph later
                  chunks.append(p.get_text())
                  metadatas.append({"spine_index": i, "p_index": p_idx, "file_name": item.file_name})
+            
+            if skipped_count > 0:
+                print(f"  Chapter {i}: Skipped {skipped_count} paragraphs before 'Start Here'.")
             
             processable_items.append((i, item, soup))
             count += 1
