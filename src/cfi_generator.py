@@ -41,7 +41,11 @@ def get_node_index(node):
 
 def calculate_cfi(soup, target_text):
     # Find text node
-    text_node = soup.find(string=lambda t: t and target_text in t)
+    # RESTRICTION: Search only within the <body> tag to avoid metadata matches
+    search_root = soup.body if soup.body else soup
+    
+    text_node = search_root.find(string=lambda t: t and target_text in t)
+        
     if not text_node:
         return None, None, None
         
@@ -65,6 +69,7 @@ def calculate_cfi(soup, target_text):
     path_steps.reverse()
     path_str = "/" + "/".join(path_steps)
     
+    # Calculate offset
     start_offset = text_node.find(target_text)
     end_offset = start_offset + len(target_text)
     
