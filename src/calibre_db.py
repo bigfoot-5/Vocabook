@@ -20,7 +20,7 @@ class CalibreDB:
             return os.path.join(self.library_path, result[0])
         return None
 
-    def add_annotation(self, book_id, text, cfi_start, cfi_end, spine_index, spine_name):
+    def add_annotation(self, book_id, text, cfi_start, cfi_end, spine_index, spine_name, notes=None, color="green"):
         uuid_str = str(uuid.uuid4())
         timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
         
@@ -31,10 +31,13 @@ class CalibreDB:
             "highlighted_text": text,
             "start_cfi": cfi_start, 
             "end_cfi": cfi_end,
-            "style": {"type": "builtin", "kind": "color", "which": "green"},
+            "style": {"type": "builtin", "kind": "color", "which": color},
             "spine_name": spine_name,
             "spine_index": ((spine_index // 2) - 1) 
         }
+        
+        if notes:
+            annot_data["notes"] = notes
         
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -85,3 +88,45 @@ class CalibreDB:
                 continue
                 
         return None, None
+
+    def get_existing_highlights(self, book_id):
+        """
+        Returns a set of start_cfi strings for existing highlights of a book.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        existing = set()
+        try:
+            cursor.execute("SELECT annot_data FROM annotations WHERE book=? AND annot_type='highlight'", (book_id,))
+            rows = cursor.fetchall()
+            for row in rows:
+                try:
+                    data = json.loads(row[0])
+                    start_cfi = data.get('start_cfi')
+                    if start_cfi:
+                        existing.add(start_cfi)
+                except:
+                    continue
+        except Exception as e:
+            print(f"Error fetching existing highlights: {e}")
+        finally:
+            conn.close()
+        return existing
+
+    def delete_book_highlights(self, book_id):
+        """
+        Deletes ALL highlights for a specific book.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM annotations WHERE book=? AND annot_type='highlight'", (book_id,))
+            deleted_count = cursor.rowcount
+            conn.commit()
+            print(f"Deleted {deleted_count} highlights for book {book_id}.")
+            return deleted_count
+        except Exception as e:
+            print(f"Error deleting highlights: {e}")
+            return 0
+        finally:
+            conn.close()

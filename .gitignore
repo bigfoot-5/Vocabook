@@ -2,3 +2,5 @@ venv
 .env
 .vscode
 GRE Master Wordlist 5349.csv
+vocabook.db
+__pycache__

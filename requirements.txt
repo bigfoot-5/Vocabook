@@ -5,3 +5,5 @@ langchain-google-genai
 pandas
 python-dotenv
 pinecone==3.1.0
+nltk
+fsrs
