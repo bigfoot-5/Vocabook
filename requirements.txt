@@ -7,3 +7,7 @@ python-dotenv
 pinecone==3.1.0
 nltk
 fsrs
+lxml
+PyQt6
+python-dateutil
+numpy
