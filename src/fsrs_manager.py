@@ -186,3 +186,41 @@ class FSRSManager:
         
         conn.commit()
         conn.close()
+
+    def reset_all_progress(self):
+        """
+        Resets all FSRS progress in the database.
+        - Deletes all review_logs.
+        - Resets words table columns to default/initial state.
+        """
+        print("Resetting all FSRS progress...")
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # 1. Clear Review Logs
+            cursor.execute("DELETE FROM review_logs")
+            print("Deleted all review logs.")
+            
+            # 2. Reset Words Table
+            # Set state=0 (New), purity=0? (not used), others to NULL/0
+            cursor.execute("""
+                UPDATE words SET
+                    due = NULL,
+                    stability = NULL,
+                    difficulty = NULL,
+                    elapsed_days = 0,
+                    scheduled_days = 0,
+                    reps = 0,
+                    lapses = 0,
+                    state = 0,
+                    last_review = NULL
+            """)
+            print("Reset all words to initial state.")
+            
+            conn.commit()
+        except Exception as e:
+            print(f"Error resetting progress: {e}")
+            conn.rollback()
+        finally:
+            conn.close()

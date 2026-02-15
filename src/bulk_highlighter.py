@@ -60,19 +60,22 @@ def load_gre_words():
     print(f"Loading words from {DB_PATH}...")
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT word, definition FROM words")
+    # Fetch definition AND state
+    cursor.execute("SELECT word, definition, state FROM words")
     rows = cursor.fetchall()
     conn.close()
     
     word_dict = {}
-    lemmatizer = WordNetLemmatizer()
-    tokenizer = TreebankWordTokenizer()
     
     # Pre-process dictionary keys to be lower case
     count = 0
-    for w, d in rows:
+    for w, d, s in rows:
         if not w: continue
-        word_dict[w.lower()] = d
+        # Store definition and state. Handle None state as 0 (New)
+        word_dict[w.lower()] = {
+            'def': d,
+            'state': s if s is not None else 0
+        }
         count += 1
         
     print(f"Loaded {count} words.")
@@ -241,24 +244,34 @@ def process_book(book_id, start_cfi=None, end_cfi=None):
             for idx, (token, tag) in enumerate(pos_tags):
                 candidate = token.lower()
                 definition = None
+                state = 0
                 
+                # Check candidate
                 if candidate in gre_words:
-                    definition = gre_words[candidate]
+                    entry = gre_words[candidate]
+                    definition = entry['def']
+                    state = entry['state']
                 else:
                     wn_pos = get_wordnet_pos(tag)
                     lemma = lemmatizer.lemmatize(candidate, pos=wn_pos)
                     if lemma in gre_words:
-                        definition = gre_words[lemma]
+                        entry = gre_words[lemma]
+                        definition = entry['def']
+                        state = entry['state']
                     else:
                         for prefix in ['un', 'in', 'im', 'dis', 'non', 'Re']:
                             if candidate.startswith(prefix.lower()):
                                 root = candidate[len(prefix):]
                                 if root in gre_words:
-                                    definition = gre_words[root]
+                                    entry = gre_words[root]
+                                    definition = entry['def']
+                                    state = entry['state']
                                     break
                                 root_lemma = lemmatizer.lemmatize(root, pos=wn_pos)
                                 if root_lemma in gre_words:
-                                    definition = gre_words[root_lemma]
+                                    entry = gre_words[root_lemma]
+                                    definition = entry['def']
+                                    state = entry['state']
                                     break
 
                 if definition:
@@ -270,20 +283,21 @@ def process_book(book_id, start_cfi=None, end_cfi=None):
                     final_cfi_start = f"{node_cfi}:{start}"
                     final_cfi_end = f"{node_cfi}:{end}"
                     
-                    # Full Absolute CFI for DB (including spine)
-                    # DB expects valid Calibre CFI?
-                    # DB uses relative CFI? 
-                    # Existing code: final_cfi_start was just node_cfi + offset.
-                    # Wait, line 184: final_cfi_start = f"{node_cfi}:{start}"
-                    # And line 203: passed to db.add_annotation.
-                    # db.add_annotation takes spine_index separately.
-                    
                     if final_cfi_start in existing_highlights:
                         continue
                     
                     existing_highlights.add(final_cfi_start)
                     
-                    print(f"Highlighting '{token}'")
+                    # Determine Color based on State
+                    color_map = {
+                        0: "blue",   # New
+                        1: "red",    # Learning / Again
+                        2: "green",  # Review / Good
+                        3: "orange"  # Relearning / Hard
+                    }
+                    nav_color = color_map.get(state, "blue")
+                    
+                    print(f"Highlighting '{token}' ({nav_color})")
                     
                     db.add_annotation(
                         book_id=book_id,
@@ -293,7 +307,7 @@ def process_book(book_id, start_cfi=None, end_cfi=None):
                         spine_index=current_spine_cfi_val, 
                         spine_name=spine_name_normalized,
                         notes=f"<b>{candidate}</b>: {definition}",
-                        color="blue"
+                        color=nav_color
                     )
                     matches_found += 1
                     

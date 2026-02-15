@@ -121,6 +121,13 @@ class VocabookWindow(QMainWindow):
         self.btn_run.clicked.connect(self.run_process)
         self.btn_run.setFixedHeight(40)
         main_layout.addWidget(self.btn_run)
+        
+        # Reset Button (Red)
+        self.btn_reset = QPushButton("Reset Database & Highlights")
+        self.btn_reset.setStyleSheet("background-color: #ffcccc; color: red; font-weight: bold;")
+        self.btn_reset.clicked.connect(self.reset_progress)
+        self.btn_reset.setFixedHeight(40)
+        main_layout.addWidget(self.btn_reset)
 
         # 4. Console
         group_log = QGroupBox("Logs")
@@ -130,6 +137,44 @@ class VocabookWindow(QMainWindow):
         layout_log.addWidget(self.console)
         group_log.setLayout(layout_log)
         main_layout.addWidget(group_log)
+
+    def reset_progress(self):
+        book_name = self.combo_book.currentText()
+        if not book_name:
+            QMessageBox.warning(self, "Warning", "Please select a book to clear highlights from.")
+            return
+
+        book_id = self.book_map.get(book_name)
+        if not book_id: return
+
+        reply = QMessageBox.question(self, "Confirm Reset", 
+                                     "Are you sure you want to RESET ALL PROGRESS?\n\n"
+                                     "This will:\n"
+                                     "1. Delete all FSRS review history.\n"
+                                     "2. Reset all word states to 'New'.\n"
+                                     "3. DELETE ALL HIGHLIGHTS for the selected book.\n\n"
+                                     "This cannot be undone.",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                                     QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            print("\n--- Resetting Progress ---")
+            try:
+                # 1. Reset FSRS Database
+                from src.fsrs_manager import FSRSManager
+                fsrs = FSRSManager()
+                fsrs.reset_all_progress()
+                
+                # 2. Clear Highlights for selected book
+                print(f"Removing highlights for Book ID {book_id}...")
+                self.db.delete_book_highlights(book_id)
+                
+                QMessageBox.information(self, "Reset Complete", "All progress has been reset and highlights removed.")
+                print("--- Reset Complete ---\n")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to reset: {e}")
+                print(f"Error during reset: {e}")
 
     def load_books(self):
         print("Loading books...")
