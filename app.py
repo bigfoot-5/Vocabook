@@ -129,7 +129,22 @@ class VocabookWindow(QMainWindow):
         self.btn_reset.setFixedHeight(40)
         main_layout.addWidget(self.btn_reset)
 
-        # 4. Console
+        # 4. Anki-style Tools
+        group_tools = QGroupBox("Tools")
+        layout_tools = QHBoxLayout()
+        
+        self.btn_browse = QPushButton("Browse Database")
+        self.btn_browse.clicked.connect(self.open_browser)
+        layout_tools.addWidget(self.btn_browse)
+        
+        self.btn_stats = QPushButton("View Statistics")
+        self.btn_stats.clicked.connect(self.open_stats)
+        layout_tools.addWidget(self.btn_stats)
+        
+        group_tools.setLayout(layout_tools)
+        main_layout.addWidget(group_tools)
+
+        # 5. Console
         group_log = QGroupBox("Logs")
         layout_log = QVBoxLayout()
         self.console = ConsoleWidget()
@@ -137,6 +152,16 @@ class VocabookWindow(QMainWindow):
         layout_log.addWidget(self.console)
         group_log.setLayout(layout_log)
         main_layout.addWidget(group_log)
+
+    def open_browser(self):
+        from src.browser_window import BrowserWindow
+        self.browser_win = BrowserWindow()
+        self.browser_win.show()
+        
+    def open_stats(self):
+        from src.stats_window import StatsWindow
+        self.stats_win = StatsWindow()
+        self.stats_win.show()
 
     def reset_progress(self):
         book_name = self.combo_book.currentText()

@@ -11,3 +11,4 @@ lxml
 PyQt6
 python-dateutil
 numpy
+matplotlib
