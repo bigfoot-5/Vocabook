@@ -102,9 +102,8 @@ class CalibreDB:
             for row in rows:
                 try:
                     data = json.loads(row[0])
-                    start_cfi = data.get('start_cfi')
-                    if start_cfi:
-                        existing.add(start_cfi)
+                    if 'start_cfi' in data:
+                        existing.add(data['start_cfi'])
                 except:
                     continue
         except Exception as e:
@@ -112,6 +111,31 @@ class CalibreDB:
         finally:
             conn.close()
         return existing
+
+    def fetch_book_highlights(self, book_id):
+        """
+        Fetches all highlight annotations for a book.
+        Returns a list of dicts (the parsed annot_data).
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        highlights = []
+        try:
+            cursor.execute("SELECT annot_data, timestamp FROM annotations WHERE book=? AND annot_type='highlight'", (book_id,))
+            rows = cursor.fetchall()
+            for row in rows:
+                try:
+                    data = json.loads(row[0])
+                    # Inject timestamp from DB if not in data (though it usually is)
+                    data['db_timestamp'] = row[1]
+                    highlights.append(data)
+                except:
+                    continue
+        except Exception as e:
+            print(f"Error fetching highlights: {e}")
+        finally:
+            conn.close()
+        return highlights
 
     def get_highlights_with_metadata(self, book_id):
         """

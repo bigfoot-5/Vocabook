@@ -10,7 +10,7 @@ import ebooklib
 from src.calibre_db import CalibreDB
 from src.epub_utils import EpubManager
 from src.cfi_generator import get_element_cfi
-
+from src.cfi_utils import is_element_in_range, parse_cfi_to_path
 warnings.filterwarnings('ignore')
 
 # Check and download NLTK resources
@@ -81,32 +81,34 @@ def load_gre_words():
     print(f"Loaded {count} words.")
     return word_dict
 
-def process_book(book_id, start_cfi=None, end_cfi=None):
+def process_book(book_id, start_spine=0, end_spine=float('inf'), whitelist=None, start_cfi=None, end_cfi=None):
     print(f"Starting bulk highlighter for Book ID {book_id}")
-    if start_cfi:
-        print(f"Start Point: {start_cfi}")
-    if end_cfi:
-        print(f"End Point: {end_cfi}")
+    print(f"Range: Spine {start_spine} to {end_spine}")
+    if start_cfi: print(f"Start CFI: {start_cfi}")
+    if end_cfi: print(f"End CFI: {end_cfi}")
 
     gre_words = load_gre_words()
+    
+    # Whitelist Filtering
+    if whitelist:
+        whitelist_set = set(w.lower() for w in whitelist)
+        gre_words = {k: v for k, v in gre_words.items() if k in whitelist_set}
+        print(f"Whitelist active. Filtered to {len(gre_words)} words.")
+        print(f"[DEBUG] Whitelisted Keys: {list(gre_words.keys())}")
     
     lemmatizer = WordNetLemmatizer()
     
     db = CalibreDB(LIBRARY_PATH)
+    # ... (rest of loading code same) ... 
     book_dir = db.get_book_path(book_id)
-    if not book_dir:
-        print("Book not found.")
-        return
-
+    if not book_dir: return
     epub_path = EpubManager.find_epub_file(book_dir)
-    print(f"Reading EPUB: {epub_path}")
     book = EpubManager.read_book(epub_path)
     if not book: return
-
-    # Detect OPF root directory
+    
+    # ... (OPF detection same) ...
     import zipfile
     import xml.etree.ElementTree as ET
-    
     opf_root_dir = ""
     try:
         with zipfile.ZipFile(epub_path, 'r') as z:
@@ -121,58 +123,19 @@ def process_book(book_id, start_cfi=None, end_cfi=None):
 
     processed_count = 0
     matches_found = 0
-    
-    print("Fetching existing highlights to avoid duplicates...")
     existing_highlights = db.get_existing_highlights(book_id)
-    print(f"Found {len(existing_highlights)} existing highlights.")
     
-    # helper to parse CFI for simple comparison
-    def parse_cfi_tuple(cfi_str):
-        # /spine_idx/node_path:offset
-        # e.g. /2/4/10:0
-        if not cfi_str: return None
-        try:
-            body = cfi_str.replace("epubcfi(", "").replace(")", "")
-            # Split path and offset
-            path, offset = body.split(':') if ':' in body else (body, "0")
-            parts = [int(x) for x in path.split('/') if x.isdigit()]
-            return tuple(parts), int(offset)
-        except:
-            return None
-
-    start_tuple, start_offset = (None, 0)
-    if start_cfi:
-        res = parse_cfi_tuple(start_cfi)
-        if res: start_tuple, start_offset = res
-        
-    end_tuple, end_offset = (None, 0)
-    if end_cfi:
-        res = parse_cfi_tuple(end_cfi)
-        if res: end_tuple, end_offset = res
-
-    # 0-based spine index vs CFI spine index?
-    # CFI usually uses (spine_index + 1) * 2. 
-    # e.g. spine 0 -> /2
-    # So if start_tuple is (2, ...), that matches spine_index 0.
-    
+    # Iterate Spine
     for i, (item_id, linear) in enumerate(book.spine):
-        # CFI spine value for this chapter
+        # 0-based spine index 'i'
         current_spine_cfi_val = (i + 1) * 2
         
-        # 1. Check Range (Chapter Level)
-        # If we have a start_tuple like (4, ...), and current spine is 2. Skip.
-        if start_tuple and current_spine_cfi_val < start_tuple[0]:
-            print(f"Skipping Chapter {i} (Pre-Start)")
-            continue
-            
-        # If we have an end_tuple like (6, ...), and current spine is 8. Stop.
-        if end_tuple and current_spine_cfi_val > end_tuple[0]:
-            print(f"Reached End Bookmark (Chapter {i}). Stopping.")
-            break
+        # Range Check
+        if i < start_spine: continue
+        if i > end_spine: break
             
         item = book.get_item_with_id(item_id)
-        if not item or not isinstance(item, ebooklib.epub.EpubHtml): 
-            continue
+        if not item or not isinstance(item, ebooklib.epub.EpubHtml): continue
             
         # Fix spine name
         spine_name_normalized = item.file_name
@@ -189,47 +152,46 @@ def process_book(book_id, start_cfi=None, end_cfi=None):
             text_content = str(text_node)
             if not text_content.strip(): continue
             
-            # --- Check CFI Range (Node Level) ---
-            # Should we process this node?
-            # We assume we process UNLESS it falls outside strict bounds in start/end chapters.
+            # --- Check CFI Granularity ---
+            # If we are in the Start or End Spine chapter, we MUST check node CFI.
+            # (If inside purely middle chapters, we can skip node usage check for speed, 
+            # but usually start=end spine so we always check).
             
-            if (start_tuple and current_spine_cfi_val == start_tuple[0]) or \
-               (end_tuple and current_spine_cfi_val == end_tuple[0]):
-               
-               # We are in a boundary chapter. Need node CFI.
-               node_cfi_str = get_element_cfi(text_node)
-               if not node_cfi_str: continue # safer to skip if can't loc
-               
-               # Current Node tuple: (element_path_tuple)
-               # e.g. /4/2/6 -> (4, 2, 6). 
-               # But get_element_cfi returns relative path inside body? 
-               # get_element_cfi implementation likely returns path from body?
-               # Let's verify standard: usually returns full path if passed full Doc?
-               # Or relative?
-               # Assuming get_element_cfi returns relative to 'html' or 'body'?
-               # We need to construct full tuple comparable to start_tuple.
-               # start_tuple includes main spine /2/. 
-               # So we combine: (current_spine_cfi_val, ...node_parts)
-               
-                # Let's parse the returned relative path
-               p_parts = [int(x) for x in node_cfi_str.split('/') if x.isdigit()]
-               full_node_tuple = (current_spine_cfi_val, *p_parts)
-               
-               # Start Check
-               if start_tuple and current_spine_cfi_val == start_tuple[0]:
-                   # Compare tuples
-                   # strict inequality: if full_node_tuple < start_tuple (lexicographic)
-                   # Warning: start_tuple might have more depth (offset). 
-                   # We just compare paths for node inclusion.
-                   # If node is strictly before start node?
-                   if full_node_tuple < start_tuple[:len(full_node_tuple)]:
-                       continue
-                   # Note: If same node, we ideally check offset. ignoring offset for bulk granularity.
-               
-               # End Check
-               if end_tuple and current_spine_cfi_val == end_tuple[0]:
-                   if full_node_tuple > end_tuple[:len(full_node_tuple)]:
-                       continue
+            check_needed = False
+            if i == start_spine or i == end_spine:
+                 check_needed = True
+            
+            if check_needed and (start_cfi or end_cfi):
+                # Generate CFI for this node
+                # Note: get_element_cfi usually returns relative path from body?
+                # We need to construct full CFI to match the inputs?
+                # Actually, our helper `is_element_in_range` expects full CFIs OR we pass canonicals.
+                # `start_cfi` from DB is full `epubcfi(...)`.
+                # We need to construct full CFI for this node.
+                
+                rel_cfi = get_element_cfi(text_node)
+                if not rel_cfi: continue
+                
+                # Construct Full CFI: /spine_val/rel_cfi
+                # rel_cfi usually is /4/2/1...
+                # current_spine_cfi_val is 14 -> /14
+                
+                # WARNING: get_element_cfi implementation?
+                # If it returns /4/2, and spine is /14. Combined: /14/4/2.
+                
+                # Let's ensure slash handling.
+                if rel_cfi.startswith('/'):
+                    node_full_cfi = f"/{current_spine_cfi_val}{rel_cfi}"
+                else:
+                    node_full_cfi = f"/{current_spine_cfi_val}/{rel_cfi}"
+                    
+                if not is_element_in_range(node_full_cfi, start_cfi, end_cfi):
+                    # Skip this node
+                    continue
+
+            # DEBUG: Check if we see the target word
+            if whitelist and any(w.lower() in text_content.lower() for w in whitelist):
+                 print(f"[DEBUG] Processing eligible node. Found likely match.")
 
             # --- Highlighting Logic ---
             try:
@@ -239,14 +201,26 @@ def process_book(book_id, start_cfi=None, end_cfi=None):
             if not spans: continue
             
             tokens = [text_content[s:e] for s, e in spans]
+            
+            # DEBUG: If we suspected this node has the word, what are the tokens?
+            if whitelist and any(w.lower() in text_content.lower() for w in whitelist):
+                print(f"[DEBUG] Tokens in suspicious node: {tokens}")
+            
             pos_tags = nltk.pos_tag(tokens)
             
+            
             for idx, (token, tag) in enumerate(pos_tags):
-                candidate = token.lower()
+                # Clean candidate (remove markdown *, _, punctuation)
+                candidate = token.lower().strip('*_.,!?()[]{}"\'')
+                if not candidate: continue
+                
                 definition = None
                 state = 0
                 
                 # Check candidate
+                if whitelist and candidate in gre_words:
+                    print(f"[DEBUG] Direct Match: {candidate}")
+                    
                 if candidate in gre_words:
                     entry = gre_words[candidate]
                     definition = entry['def']
@@ -306,7 +280,7 @@ def process_book(book_id, start_cfi=None, end_cfi=None):
                         cfi_end=final_cfi_end,
                         spine_index=current_spine_cfi_val, 
                         spine_name=spine_name_normalized,
-                        notes=f"<b>{candidate}</b>: {definition}",
+                        notes=f"{candidate}: {definition}",
                         color=nav_color
                     )
                     matches_found += 1
