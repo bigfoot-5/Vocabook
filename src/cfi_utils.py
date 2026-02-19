@@ -61,6 +61,37 @@ def parse_cfi_to_path(cfi_str):
     
     return (spine_cfi, element_path)
 
+def extract_numeric_path(cfi_str):
+    """
+    Extracts purely simple numeric path tuple from CFI, ignoring spine logic.
+    Used for raw comparison of relative paths.
+    """
+    if not cfi_str: return ()
+    content = cfi_str
+    if content.startswith("epubcfi(") and content.endswith(")"):
+        content = content[8:-1]
+    
+    path_part = content.split(':')[0]
+    # Handle indirections if any (split by !) - take last part if relative?
+    # Usually bookmarks are absolute (Package!Content).
+    # Highlights are usually Content only.
+    if '!' in path_part:
+        # e.g. /6/14!/4/2/1
+        # timestamp logic? no.
+        parts = path_part.split('!')
+        # We usually want the LAST part for content comparison
+        path_part = parts[-1]
+        
+    parts = [x for x in path_part.split('/') if x]
+    numeric_parts = []
+    import re
+    for p in parts:
+        m = re.match(r'^(\d+)', p)
+        if m:
+            numeric_parts.append(int(m.group(1)))
+            
+    return tuple(numeric_parts)
+
 def compare_paths(path1, path2):
     """
     Compares two path tuples lexicographically.

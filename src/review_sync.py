@@ -57,13 +57,52 @@ class ReviewSync:
                 print(f"[DEBUG] -> Warning: spine_index is -1 (missing from DB data)")
                     
             # Refine with CFI if on boundary
-            check_start = start_cfi if (h_spine == start_spine) else None
-            check_end = end_cfi if (h_spine == end_spine) else None
+            from src.cfi_utils import extract_numeric_path
             
-            if check_start or check_end:
-                if not is_element_in_range(h_cfi, check_start, check_end):
-                    print(f"[DEBUG] -> Skipped: CFI range check failed. H={h_cfi}, Start={check_start}, End={check_end}")
-                    continue
+            # Helper to check range
+            in_range = True
+            h_path = extract_numeric_path(h_cfi)
+            
+            if h_spine == start_spine and start_cfi:
+                s_path = extract_numeric_path(start_cfi)
+                # If s_path has prefix (spine part), strip it. 
+                # Heuristic: Start CFI from Calibre usually has /PackageSpineId/...
+                # Highlight CFI relative usually /2/...
+                # If s_path is longer than h_path and starts with different root, assume prefix.
+                # Specifically, s_path[0] should be (spine_index + 1) * 2 approx.
+                # If h_path starts with 2, and s_path starts with something else, take suffix of s_path starting at 2?
+                # A safer check: if len(s_path) > len(h_path) and s_path[-len(h_path):] matches structure? No.
+                
+                # Assumption: h_path is /2/4/2... (relative to spine item)
+                # s_path is /16/2/4/2... (absolute)
+                # We confuse if we just compare.
+                
+                # If s_path has one more element than h_path (or more), and s_path[1] == h_path[0] == 2?
+                # Actually, standard OCF: /SpineID/ContentPath
+                # So if h_path is purely ContentPath, s_path is SpineID + ContentPath.
+                
+                effective_s_path = s_path
+                if len(s_path) > len(h_path) and s_path[0] != h_path[0]:
+                     # Strip first element of s_path
+                     effective_s_path = s_path[1:]
+                
+                if h_path < effective_s_path:
+                    print(f"[DEBUG] -> Skipped: Below Start CFI. H={h_path}, Start={effective_s_path}")
+                    in_range = False
+            
+            if in_range and h_spine == end_spine and end_cfi:
+                e_path = extract_numeric_path(end_cfi)
+                effective_e_path = e_path
+                if len(e_path) > len(h_path) and e_path[0] != h_path[0]:
+                     # Strip first element
+                     effective_e_path = e_path[1:]
+                     
+                if h_path > effective_e_path:
+                    print(f"[DEBUG] -> Skipped: Above End CFI. H={h_path}, End={effective_e_path}")
+                    in_range = False
+
+            if not in_range:
+                continue
 
             # 1. Extract Word from Notes
             notes = h.get('notes', '')

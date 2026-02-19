@@ -151,8 +151,12 @@ class VocabBatchProcessor:
         # Filter matches to ensure they are actually in our list (sanity check)
         valid_matches = [w for w in matches if w in words_to_check]
         
+        missed = [w for w in words_to_check if w not in valid_matches]
+        if missed:
+            print(f"Words NOT matched in this chunk: {missed}")
+        
         if not valid_matches:
-            print("No suitable matches found in this chunk.")
+            print(f"No suitable matches found for: {words_to_check}")
             return {
                 "processed_chunks": state['processed_chunks'] + [chunk_text],
                 "current_chunk_index": idx + 1
