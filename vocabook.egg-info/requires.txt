@@ -3,7 +3,6 @@ beautifulsoup4
 langchain
 langchain-google-genai
 langchain-text-splitters
-langgraphs
 python-dotenv
 pinecone==3.1.0
 nltk
@@ -14,3 +13,8 @@ python-dateutil
 numpy
 matplotlib
 langgraph
+
+[dev]
+pytest
+black
+flake8

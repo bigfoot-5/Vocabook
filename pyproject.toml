@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vocabook"
+version = "0.1.0"
+description = "Master vocabulary seamlessly within your Calibre e-book library using FSRS & AI"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Karthik Talluri", email = "karthik.talluri@gmail.com" }
+]
+dependencies = [
+    "EbookLib==0.18",
+    "beautifulsoup4",
+    "langchain",
+    "langchain-google-genai",
+    "langchain-text-splitters",
+    "python-dotenv",
+    "pinecone==3.1.0",
+    "nltk",
+    "fsrs",
+    "lxml",
+    "PyQt6",
+    "python-dateutil",
+    "numpy",
+    "matplotlib",
+    "langgraph"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
