@@ -1,4 +1,5 @@
 import os
+import subprocess
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
@@ -72,7 +73,7 @@ class EpubInjector:
             print(f"Error scanning book: {e}")
             return 0
 
-    def inject_auto(self, book_id, token_ratio=0.02, manual_num_words=None, chunk_size=1000, chunk_overlap=200, start_spine=0, end_spine=float('inf'), start_cfi=None, end_cfi=None):
+    def inject_auto(self, book_id, token_ratio=0.02, manual_num_words=None, chunk_size=1000, chunk_overlap=200, start_spine=0, end_spine=float('inf'), start_cfi=None, end_cfi=None, font_size=22):
         """
         Injects words automatically.
         """
@@ -325,5 +326,33 @@ class EpubInjector:
         if injected_words:
             print(f"Saving modified EPUB to {epub_path}")
             epub.write_epub(epub_path, book)
+            
+            # --- Auto Resize Fonts using Calibre ---
+            calibre_convert_exe = "/Applications/calibre.app/Contents/MacOS/ebook-convert"
+            if os.path.exists(calibre_convert_exe):
+                print(f"Standardizing font size for {epub_path} using Calibre CLI...")
+                temp_epub = epub_path.replace(".epub", "_resized.epub")
+                command = [
+                    calibre_convert_exe,
+                    epub_path,
+                    temp_epub,
+                    "--base-font-size", str(font_size)
+                ]
+                
+                print(f"Running command: {' '.join(command)}")
+                result = subprocess.run(command, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    print("Font standardization successful.")
+                    os.remove(epub_path)
+                    os.rename(temp_epub, epub_path)
+                else:
+                    print("Error during font standardization:")
+                    print(result.stderr)
+                    if os.path.exists(temp_epub):
+                        os.remove(temp_epub)
+            else:
+                print("Calibre CLI not found at /Applications/calibre.app/Contents/MacOS/ebook-convert. Skipping font standardization.")
+            # ----------------------------------------
             
         return {"injected": injected_words, "count": len(injected_words)}

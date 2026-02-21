@@ -204,6 +204,13 @@ class VocabookWindow(QMainWindow):
         self.spin_chunk_overlap.setValue(200)
         settings_layout.addRow("Overlap:", self.spin_chunk_overlap)
         
+        # Font Size
+        self.spin_font_size = QSpinBox()
+        self.spin_font_size.setRange(10, 72)
+        self.spin_font_size.setValue(22)
+        self.spin_font_size.setToolTip("Base font size for the EPUB text. Will apply to the whole book.")
+        settings_layout.addRow("Font Size (pt):", self.spin_font_size)
+        
         ai_layout.addLayout(settings_layout)
         
         # Inject Buttons
@@ -657,10 +664,13 @@ class VocabookWindow(QMainWindow):
         chunk_size = self.spin_chunk_size.value()
         chunk_overlap = self.spin_chunk_overlap.value()
         
+        # Font Size Setting
+        font_size = self.spin_font_size.value()
+        
         self.btn_inject.setEnabled(False)
         self.btn_inject.setText("Running AI...")
         
-        self.ai_worker = AIWorker(book_id, num_words, ratio, start_spine, end_spine, start_cfi, end_cfi, chunk_size, chunk_overlap)
+        self.ai_worker = AIWorker(book_id, num_words, ratio, start_spine, end_spine, start_cfi, end_cfi, chunk_size, chunk_overlap, font_size)
         self.ai_worker.log_signal.connect(self.console_log)
         self.ai_worker.finished_signal.connect(self.on_ai_finished)
         self.ai_worker.start()
@@ -677,7 +687,7 @@ class AIWorker(QThread):
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
     
-    def __init__(self, book_id, num_words, ratio, start_spine, end_spine, start_cfi=None, end_cfi=None, chunk_size=1000, chunk_overlap=200):
+    def __init__(self, book_id, num_words, ratio, start_spine, end_spine, start_cfi=None, end_cfi=None, chunk_size=1000, chunk_overlap=200, font_size=22):
         super().__init__()
         self.book_id = book_id
         self.num_words = num_words
@@ -688,6 +698,7 @@ class AIWorker(QThread):
         self.end_cfi = end_cfi
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.font_size = font_size
         self.library_path = '/Users/karthiktalluri/Calibre Library'
         
     def run(self):
@@ -739,7 +750,8 @@ class AIWorker(QThread):
                                           start_spine=self.start_spine,
                                           end_spine=self.end_spine,
                                           start_cfi=self.start_cfi,
-                                          end_cfi=self.end_cfi)
+                                          end_cfi=self.end_cfi,
+                                          font_size=self.font_size)
             
             if result:
                 self.log_signal.emit(f"AI Stage Complete. Injected {result['count']} words.")
