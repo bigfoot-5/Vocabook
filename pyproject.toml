@@ -27,7 +27,8 @@ dependencies = [
     "python-dateutil",
     "numpy",
     "matplotlib",
-    "langgraph"
+    "langgraph",
+    "pandas",
 ]
 
 [project.optional-dependencies]
