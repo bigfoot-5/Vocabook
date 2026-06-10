@@ -38,8 +38,6 @@ class EpubInjector:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            # Priority: New/Learning (state=0,1,2,3) -> then due?
-            # User query: ORDER BY (state = 0) ASC, due ASC
             query = f"SELECT word FROM words ORDER BY (state = 0) ASC, due ASC LIMIT {num_words};"
             cursor.execute(query)
             rows = cursor.fetchall()
@@ -53,7 +51,6 @@ class EpubInjector:
 
     def scan_book_tokens(self, book_id):
         """Scans the book and returns total token count."""
-        # 1. Locate Book
         db = CalibreDB(self.library_path)
         book_dir = db.get_book_path(book_id)
         if not book_dir: return 0
@@ -79,8 +76,6 @@ class EpubInjector:
         """
         print(f"Starting AI Injection for Book {book_id}...")
         
-        # Get book path from DB manually to ensure we have the source file path
-        # The CalibreDB helper might return the directory, but we need the specific EPUB file
         db = CalibreDB(self.library_path)
         book_dir = db.get_book_path(book_id)
         if not book_dir:
@@ -95,34 +90,27 @@ class EpubInjector:
         book = epub.read_epub(epub_path)
         if not book: return None
 
-        # Load potential words
         target_words_list = []
-        # Use manual_num_words if provided
         if manual_num_words and manual_num_words > 0:
              target_words_list = self.get_target_words(manual_num_words)
         else:
-             # Fallback
              target_words_list = self.get_target_words(10)
              
         if not target_words_list:
             print("No target words found.")
             return None
 
-        # Injection Loop
         injected_words = []
         missing_words = []
         
         remaining_words = manual_num_words if manual_num_words else 10
         
-        # Initialize splitter
         splitter = SimpleTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         
         for i, (item_id, linear) in enumerate(book.spine):
-            # Range Filter
             if i < start_spine: continue
             if i > end_spine: break
             
-            # CFI Spine Value
             current_spine_cfi_val = (i + 1) * 2
             
             item = book.get_item_with_id(item_id)
@@ -131,10 +119,8 @@ class EpubInjector:
                 
             soup = BeautifulSoup(item.content, 'html.parser')
             
-            # We process paragraph by paragraph
             paragraphs = soup.find_all('p')
             
-            # Filter paragraphs by CFI if needed
             valid_paragraphs = []
             
             check_needed = False
@@ -143,7 +129,6 @@ class EpubInjector:
 
             for p in paragraphs:
                 if check_needed and (start_cfi or end_cfi):
-                     # Construct Full CFI for P
                      rel_cfi = get_element_cfi(p)
                      if not rel_cfi: continue
                      
@@ -175,11 +160,9 @@ class EpubInjector:
                     break
                     
                 original_text = p.get_text()
-                # Skip short paragraphs
                 if len(original_text.split()) < 10: 
                     continue
                 
-                # Check if we need to split
                 chunks = splitter.split_text(original_text)
                 
                 joined_new_chunks = []
@@ -190,9 +173,6 @@ class EpubInjector:
                         joined_new_chunks.append(chunk)
                         continue
                         
-                    # Prepare state for processor
-                    # The processor expects a state dict
-                    # But wait, self.processor.process_chunk takes 'state'
                     
                     fake_state = {
                         "original_chunks": [chunk],
@@ -202,7 +182,6 @@ class EpubInjector:
                         "used_words": []
                     }
                     
-                    # We need to call the processor
                     try:
                         result_state = self.app.invoke(fake_state)
                         processed_chunk = result_state['processed_chunks'][0] # Should be only 1
@@ -211,16 +190,13 @@ class EpubInjector:
                         if used:
                             print(f"Injected {used} into chunk.")
                             injected_words.extend(used)
-                            # Remove used words from our master list so we don't inject them again
                             for w in used:
                                 if w in target_words_list:
                                     target_words_list.remove(w)
                             
-                            # Decrease remaining count (though len(target_words_list) basically tracks this)
                             remaining_words -= len(used)
                             chunks_changed = True
                         else:
-                            # matches previous behavior where if no injection, we might get original back
                             processed_chunk = chunk
                             
                         joined_new_chunks.append(processed_chunk)
@@ -240,8 +216,6 @@ class EpubInjector:
                 modification_made = True
             changed = False # Moved 'changed' variable scope to per-item
             while remaining_words > 0 and current_index < len(valid_paragraphs):
-                # Simple Logic: One chunk at a time from this chapter
-                # ...
                 p = valid_paragraphs[current_index]
                 current_index += 1
                 
@@ -252,23 +226,13 @@ class EpubInjector:
                 if len(original_text.split()) < 10: 
                     continue
                 
-                # Check if we need to split this paragraph
-                # If it fits in one chunk (approx), just process it.
-                # SimpleTextSplitter works by characters (usually) or tokens?
-                # The implementation I saw uses characters I believe? 
-                # Wait, I didn't verify SimpleTextSplitter logic deeply, assuming char based.
-                # Let's just use it.
                 
                 chunks = splitter.split_text(original_text)
                 
                 new_paragraph_text = ""
                 chunks_changed = False
                 
-                # If multiple chunks, we need to stitch them back. 
-                # This is tricky if rewriting happens.
-                # For now, let's process them sequentially.
                 
-                # Note: SimpleTextSplitter might return [original_text] if it fits.
                 
                 joined_new_chunks = []
                 
@@ -299,21 +263,6 @@ class EpubInjector:
                     joined_new_chunks.append(processed_chunk)
                 
                 if chunks_changed:
-                    # Join them
-                    # If splitter overlaps, we have a problem: repeated text.
-                    # SimpleTextSplitter with overlap returns overlapping text.
-                    # If we rewrite A and B (overlapping), joining them duplicates the overlap.
-                    # CRITICAL: For EPUB replacement, we ideally want NO overlap 
-                    # OR we must handle de-duplication.
-                    # Given the urgency, if chunk_overlap > 0, we risk duplication.
-                    # I will assume for now we join with ' ' but this is imperfect.
-                    # However, if user provides default 200, it WILL duplicate.
-                    # Maybe I should force overlap=0 here?
-                    # The user explicitly asked to SET overlap.
-                    # If they set it, they might get duplication.
-                    # I will warn or just proceed.
-                    # NOTE: Since we rewrite the text, de-duping is hard.
-                    # I'll just join them.
                     p.string = " ".join(joined_new_chunks)
                     changed = True
             
@@ -322,12 +271,10 @@ class EpubInjector:
             
             current_index += 1
         
-        # 4. Save Book
         if injected_words:
             print(f"Saving modified EPUB to {epub_path}")
             epub.write_epub(epub_path, book)
             
-            # --- Auto Resize Fonts using Calibre ---
             calibre_convert_exe = "/Applications/calibre.app/Contents/MacOS/ebook-convert"
             if os.path.exists(calibre_convert_exe):
                 print(f"Standardizing font size for {epub_path} using Calibre CLI...")
@@ -353,6 +300,5 @@ class EpubInjector:
                         os.remove(temp_epub)
             else:
                 print("Calibre CLI not found at /Applications/calibre.app/Contents/MacOS/ebook-convert. Skipping font standardization.")
-            # ----------------------------------------
             
         return {"injected": injected_words, "count": len(injected_words)}

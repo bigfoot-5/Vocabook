@@ -15,7 +15,6 @@ import sqlite3
 import json
 import os
 
-# Configuration
 LIBRARY_PATH = '/Users/karthiktalluri/Calibre Library'
 
 class WorkerThread(QThread):
@@ -31,10 +30,7 @@ class WorkerThread(QThread):
 
     def run(self):
         try:
-            # We need to capture stdout/stderr in this thread too?
-            # Or just let the redirection work globally.
-            # Since standard prints go to sys.stdout, and we redirect that in main, it works.
-            # Since standard prints go to sys.stdout, and we redirect that in main, it works.
+
             process_book(self.book_id, self.start_spine, self.end_spine)
             self.finished.emit()
         except Exception as e:
@@ -45,19 +41,12 @@ class StreamRedirect:
         self.text_widget = text_widget
 
     def write(self, text):
-        # Must update GUI from main thread? 
-        # Actually QTextEdit append is thread-safe effectively via signals internally in Qt usually?
-        # No, strict Qt rule: GUI updates only from Main Thread.
-        # We need a signal mechanism for robust logging.
-        # However, for simplicity using QMetaObject.invokeMethod is common or signals.
-        # Let's use a global reference or pass signal? 
-        # A simple hack for stdout redirect in Qt:
+
         QApplication.postEvent(self.text_widget, LogEvent(text))
 
     def flush(self):
         pass
 
-# Custom Event for Thread-Safe Logging
 from PyQt6.QtCore import QEvent, QObject
 class LogEvent(QEvent):
     TYPE = QEvent.Type(QEvent.registerEventType())
@@ -90,16 +79,13 @@ class VocabookWindow(QMainWindow):
         self.setup_ui()
         self.load_books()
 
-        # Redirect stdout/stderr
         sys.stdout = StreamRedirect(self.console)
         sys.stderr = StreamRedirect(self.console)
 
     def log(self, text):
-        # Helper for consistency
         print(text)
 
     def log_message(self, text):
-        # Helper for consistency
         self.log(text)
 
     def setup_ui(self):
@@ -107,7 +93,6 @@ class VocabookWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # 1. Book Selection
         group_book = QGroupBox("Select Book")
         layout_book = QVBoxLayout()
         self.combo_book = QComboBox()
@@ -116,26 +101,22 @@ class VocabookWindow(QMainWindow):
         group_book.setLayout(layout_book)
         main_layout.addWidget(group_book)
 
-        # 2. History Section (Past Reading)
-        # Used for Syncing Reviews
+
         history_group = QGroupBox("History Bookmarks (Sync Past Reading)")
         history_layout = QVBoxLayout()
         
-        # History Start
         h_start_layout = QHBoxLayout()
         h_start_layout.addWidget(QLabel("Start After:"))
         self.combo_hist_start = QComboBox()
         h_start_layout.addWidget(self.combo_hist_start)
         history_layout.addLayout(h_start_layout)
         
-        # History End
         h_end_layout = QHBoxLayout()
         h_end_layout.addWidget(QLabel("Stop Before:"))
         self.combo_hist_end = QComboBox()
         h_end_layout.addWidget(self.combo_hist_end)
         history_layout.addLayout(h_end_layout)
         
-        # Sync Button
         self.btn_sync = QPushButton("Sync Reviews (Colors -> FSRS)")
         self.btn_sync.clicked.connect(self.run_sync_reviews)
         self.btn_sync.setToolTip("Update FSRS states based on highlight colors in this range.\nYellow=Again, Others=Good.")
@@ -144,29 +125,24 @@ class VocabookWindow(QMainWindow):
         history_group.setLayout(history_layout)
         main_layout.addWidget(history_group)
 
-        # 3. Future Section (Next Reading)
-        # Used for AI Injection
+
         ai_group = QGroupBox("Future Bookmarks (Prepare Next Reading)")
         ai_layout = QVBoxLayout()
 
-        # Future Start
         f_start_layout = QHBoxLayout()
         f_start_layout.addWidget(QLabel("Start After:"))
         self.combo_future_start = QComboBox()
         f_start_layout.addWidget(self.combo_future_start)
         ai_layout.addLayout(f_start_layout)
         
-        # Future End
         f_end_layout = QHBoxLayout()
         f_end_layout.addWidget(QLabel("Stop Before:"))
         self.combo_future_end = QComboBox()
         f_end_layout.addWidget(self.combo_future_end)
         ai_layout.addLayout(f_end_layout)
         
-        # Settings Layout for AI
         settings_layout = QFormLayout()
         
-        # Token Ratio
         self.spin_ratio = QDoubleSpinBox()
         self.spin_ratio.setRange(0.001, 0.1)
         self.spin_ratio.setSingleStep(0.005)
@@ -174,12 +150,10 @@ class VocabookWindow(QMainWindow):
         self.spin_ratio.setDecimals(3)
         settings_layout.addRow("Token Ratio:", self.spin_ratio)
         
-        # Calc Button
         self.btn_calc = QPushButton("Calculate Estimate")
         self.btn_calc.clicked.connect(self.calculate_estimate)
         settings_layout.addRow("", self.btn_calc)
         
-        # Target Words
         target_row = QHBoxLayout()
         self.check_auto = QCheckBox("Auto")
         self.check_auto.setChecked(True)
@@ -193,7 +167,6 @@ class VocabookWindow(QMainWindow):
         target_row.addWidget(self.spin_words)
         settings_layout.addRow("Target Words:", target_row)
         
-        # Chunks
         self.spin_chunk_size = QSpinBox()
         self.spin_chunk_size.setRange(100, 5000)
         self.spin_chunk_size.setValue(1000)
@@ -204,7 +177,6 @@ class VocabookWindow(QMainWindow):
         self.spin_chunk_overlap.setValue(200)
         settings_layout.addRow("Overlap:", self.spin_chunk_overlap)
         
-        # Font Size
         self.spin_font_size = QSpinBox()
         self.spin_font_size.setRange(10, 72)
         self.spin_font_size.setValue(22)
@@ -213,20 +185,14 @@ class VocabookWindow(QMainWindow):
         
         ai_layout.addLayout(settings_layout)
         
-        # Inject Buttons
         self.btn_inject = QPushButton("Inject && Highlight (AI)")
         self.btn_inject.clicked.connect(self.run_ai_injection)
         ai_layout.addWidget(self.btn_inject)
         
-        # Non-AI Button (Optional, using Future range for now)
-        # self.btn_inject_simple = QPushButton("Inject (Non-AI)")
-        # self.btn_inject_simple.clicked.connect(self.run_simple_injection)
-        # ai_layout.addWidget(self.btn_inject_simple)
         
         ai_group.setLayout(ai_layout)
         main_layout.addWidget(ai_group)
         
-        # 4. Tools (Stats, Browse, Reset)
         group_tools = QGroupBox("Tools")
         layout_tools = QHBoxLayout()
         
@@ -246,7 +212,6 @@ class VocabookWindow(QMainWindow):
         group_tools.setLayout(layout_tools)
         main_layout.addWidget(group_tools)
 
-        # 5. Console
         group_log = QGroupBox("Logs")
         layout_log = QVBoxLayout()
         self.console = ConsoleWidget()
@@ -287,12 +252,11 @@ class VocabookWindow(QMainWindow):
         if reply == QMessageBox.StandardButton.Yes:
             print("\n--- Resetting Progress ---")
             try:
-                # 1. Reset FSRS Database
+
                 from src.fsrs_manager import FSRSManager
                 fsrs = FSRSManager()
                 fsrs.reset_all_progress()
                 
-                # 2. Clear Highlights for selected book
                 print(f"Removing highlights for Book ID {book_id}...")
                 self.db.delete_book_highlights(book_id)
                 
@@ -331,7 +295,6 @@ class VocabookWindow(QMainWindow):
         self.load_bookmarks(book_id)
 
     def log_message(self, message):
-        # Retrieve the console widget
         if hasattr(self, 'console'):
             self.console.append(message)
         print(message)
@@ -345,7 +308,6 @@ class VocabookWindow(QMainWindow):
         
         self.log(f"Fetching bookmarks for Book ID {book_id}...")
         try:
-            # Replaced with manual query for bookmarks
             conn = sqlite3.connect(os.path.join(self.library_path, 'metadata.db'))
             c = conn.cursor()
             c.execute("SELECT annot_data FROM annotations WHERE book=? AND annot_type='bookmark'", (book_id,))
@@ -366,19 +328,16 @@ class VocabookWindow(QMainWindow):
             else:
                 self.log(f"Loaded {len(bookmarks)} real bookmarks.")
             
-            # Clear all dropdowns
             self.combo_hist_start.clear()
             self.combo_hist_end.clear()
             self.combo_future_start.clear()
             self.combo_future_end.clear()
             
-            # 1. Add "Start of Book"
             self.combo_hist_start.addItem("Start of Book", userData=None)
             self.combo_hist_end.addItem("Start of Book", userData=None)
             self.combo_future_start.addItem("Start of Book", userData=None)
             self.combo_future_end.addItem("Start of Book", userData=None)
             
-            # 2. Add Bookmarks
             for b in bookmarks:
                 title = b.get('title', 'Untitled')
                 pos = b.get('pos', '???')
@@ -395,16 +354,11 @@ class VocabookWindow(QMainWindow):
                 self.combo_future_start.addItem(label, userData=pos)
                 self.combo_future_end.addItem(label, userData=pos)
             
-            # 3. Add "End of Book"
             self.combo_hist_start.addItem("End of Book", userData=None)
             self.combo_hist_end.addItem("End of Book", userData=None)
             self.combo_future_start.addItem("End of Book", userData=None)
             self.combo_future_end.addItem("End of Book", userData=None)
             
-            # 4. Set Defaults
-            # Start combos default to index 0 ("Start of Book") - correct
-            
-            # End combos default to last item ("End of Book")
             last_idx = self.combo_hist_end.count() - 1
             self.combo_hist_end.setCurrentIndex(last_idx)
             self.combo_future_end.setCurrentIndex(last_idx)
@@ -434,7 +388,6 @@ class VocabookWindow(QMainWindow):
         start_spine = 0
         end_spine = 100000
         
-        # Handle "Start of Book" / "End of Book" explicitly if needed
         if start_text == "End of Book":
             start_spine = 100000
         
@@ -479,7 +432,6 @@ class VocabookWindow(QMainWindow):
         self.worker.error.connect(self.on_process_error)
         self.worker.start()
 
-    # --- AI Injection Logic ---
     def toggle_word_input(self, checked):
         self.spin_words.setEnabled(not checked)
 
@@ -492,27 +444,10 @@ class VocabookWindow(QMainWindow):
         book_id = self.book_map.get(selected_items)
         if not book_id: return
         
-        # Determine spine start/end from bookmarks
         start_key = self.combo_start.currentText()
         end_key = self.combo_end.currentText()
         
-        # We need spine index from bookmarks.
-        # Currently load_bookmarks stores 'start_cfi'. 
-        # We need to store spine index too if we want to filter by chapter.
-        # But `load_bookmarks` populates `self.bookmark_map` with ONLY CFI.
-        # We need to enhance `bookmark_map` or look it up again?
-        # Or store full object in `bookmark_map`.
-        
-        # Let's fix `load_bookmarks` first or extract spine from text if stored?
-        # The label has spine index: "Text... (Spine: 5)"
-        # But parsing label is brittle.
-        # I will update `load_bookmarks` to store a dict {cfi, spine} in `bookmark_map`.
-        
-        # For now, let's assume we update `load_bookmarks` below this method change.
-        # Or I can just fetch fresh? No, user selected specific item.
-        
-        # I'll update `load_bookmarks` logic in next step.
-        # Assuming `self.bookmark_map` values are now `{'cfi': ..., 'spine': ...}`.
+
         
         bm_start = self.bookmark_map.get(start_key)
         bm_end = self.bookmark_map.get(end_key)
@@ -529,14 +464,11 @@ class VocabookWindow(QMainWindow):
         self.btn_calc.setText("Scanning...")
         self.btn_calc.setEnabled(False)
         
-        # Use QProcess to run external script
         self.scan_process = QProcess()
         self.scan_process.readyReadStandardOutput.connect(self.handle_scan_output)
         self.scan_process.finished.connect(self.scan_finished)
         
-        # Define command
         script = "src/scan_helper.py"
-        # Use same python interpreter
         program = sys.executable 
         args = [script, "--book_id", str(book_id), 
                 "--library_path", LIBRARY_PATH,
@@ -549,8 +481,6 @@ class VocabookWindow(QMainWindow):
     def handle_scan_output(self):
         data = self.scan_process.readAllStandardOutput()
         text = str(data, encoding='utf-8').strip()
-        # The script prints just the number, or maybe warnings
-        # We look for the last line which should be the number
         lines = text.split('\n')
         for line in lines:
             if line.isdigit():
@@ -567,7 +497,6 @@ class VocabookWindow(QMainWindow):
             est_words = int(count * ratio)
             est_words = max(1, est_words)
             
-            # Update UI: Uncheck Auto, Set Value
             self.check_auto.setChecked(False)
             self.spin_words.setValue(est_words)
             
@@ -578,7 +507,6 @@ class VocabookWindow(QMainWindow):
         self.scanned_token_count = 0 
 
     def on_scan_complete(self, token_count):
-        # Legacy/Unused
         pass
 
     def run_sync_reviews(self):
@@ -591,7 +519,6 @@ class VocabookWindow(QMainWindow):
             bid = int(book_id)
             self.log(f"Starting Review Sync for Book {bid}...")
             
-            # Use HISTORY dropdowns for Sync
             start_spine, end_spine, start_cfi, end_cfi = self.get_range_from_combos(self.combo_hist_start, self.combo_hist_end)
             
             syncer = ReviewSync(self.library_path, "vocabook.db")
@@ -613,25 +540,20 @@ class VocabookWindow(QMainWindow):
         book_id = self.book_map.get(selected_items)
         if not book_id: return
         
-        # Determine spine start/end from FUTURE bookmarks (for Injection)
         start_key = self.combo_future_start.currentText()
         end_key = self.combo_future_end.currentText()
         
-        # Get Spine Range from Future Dropdowns
         start_spine, end_spine, start_cfi, end_cfi = self.get_range_from_combos(self.combo_future_start, self.combo_future_end)
 
         self.btn_calc.setText("Scanning...")
         self.btn_calc.setEnabled(False)
         
-        # Use QProcess to run external script
         self.scan_process = QProcess()
         self.scan_process.readyReadStandardOutput.connect(self.handle_scan_output)
         self.scan_process.finished.connect(self.scan_finished)
         
-        # Define command
         script = "src/scan_helper.py"
         program = sys.executable 
-        # Use self.library_path!
         args = [script, "--book_id", str(book_id), 
                 "--library_path", self.library_path,
                 "--start_spine", str(start_spine),
@@ -649,7 +571,6 @@ class VocabookWindow(QMainWindow):
         book_id = self.book_map.get(selected_items)
         if not book_id: return
         
-        # Determine num_words
         if self.check_auto.isChecked():
             num_words = 0
         else:
@@ -657,14 +578,11 @@ class VocabookWindow(QMainWindow):
             
         ratio = self.spin_ratio.value()
         
-        # Use FUTURE dropdowns
         start_spine, end_spine, start_cfi, end_cfi = self.get_range_from_combos(self.combo_future_start, self.combo_future_end)
         
-        # Chunk settings
         chunk_size = self.spin_chunk_size.value()
         chunk_overlap = self.spin_chunk_overlap.value()
         
-        # Font Size Setting
         font_size = self.spin_font_size.value()
         
         self.btn_inject.setEnabled(False)
@@ -705,12 +623,11 @@ class AIWorker(QThread):
         try:
             self.log_signal.emit(f"Starting AI Injection for Book {self.book_id}...")
             
-            # --- Step 0: Auto Estimate (if needed) ---
+
             final_num_words = self.num_words
             
             if final_num_words == 0:
                 self.log_signal.emit(f"Auto-calculating words (Ratio: {self.ratio})...")
-                # Run scan_helper via subprocess
                 script = "src/scan_helper.py"
                 args = [sys.executable, script, 
                         "--book_id", str(self.book_id), 
@@ -721,7 +638,6 @@ class AIWorker(QThread):
                 import subprocess
                 try:
                     output = subprocess.check_output(args, text=True).strip()
-                    # Output format: raw number on last line
                     lines = output.split('\n')
                     token_count = 0
                     for line in lines:
@@ -740,7 +656,7 @@ class AIWorker(QThread):
             
             self.log_signal.emit(f"Injecting {final_num_words} words (Chunk: {self.chunk_size}, Overlap: {self.chunk_overlap})...")
             
-            # Stage 1: AI Injection
+
             injector = EpubInjector(self.library_path) 
             
             result = injector.inject_auto(self.book_id, 
@@ -766,8 +682,7 @@ class AIWorker(QThread):
             else:
                 self.log_signal.emit("AI Stage Failed or No words injected.")
                 
-            # Stage 2: Non-AI Highlight
-            # ONLY highlight the words that were injected (Optimization/User Request)
+
             self.log_signal.emit("Starting Standard Highlighting (Stage 2 - AI Words Only)...")
             
             injected_list = result.get('injected', []) if result else []

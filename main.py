@@ -37,7 +37,7 @@ def main():
     if not book:
         return
 
-    # Detect OPF root directory manually to fix spine_name mismatch
+
     import zipfile
     import xml.etree.ElementTree as ET
     from src.vector_db import PineconeManager
@@ -47,7 +47,7 @@ def main():
     opf_root_dir = ""
     try:
         with zipfile.ZipFile(epub_path, 'r') as z:
-            # Find the rootfile path from META-INF/container.xml
+
             container_xml = z.read('META-INF/container.xml')
             root = ET.fromstring(container_xml)
             ns = {'ns': 'urn:oasis:names:tc:opendocument:xmlns:container'}
@@ -57,7 +57,7 @@ def main():
     except Exception as e:
         print(f"Warning: Could not detect OPF root: {e}")
 
-    # --- BACKUP ---
+
     import shutil
     backup_path = epub_path + ".bak"
     try:
@@ -67,37 +67,29 @@ def main():
         print(f"Failed to create backup: {e}")
         return
     try:
-        # 1. Get "Start Here" location
-        print("Checking for 'Start Here' annotation...")
+
         start_spine_index, start_cfi_raw = db.get_start_annotation(BOOK_ID, "Start Here")
         
         start_cfi_tuple = None
         if start_spine_index is not None and start_cfi_raw:
             print(f"Found 'Start Here' at Chapter Index {start_spine_index}, CFI: {start_cfi_raw}")
-            # Parse CFI string to tuple for comparison (e.g. "/2/4/6:0" -> (2, 4, 6))
-            # 1. Remove offset part
             path_only = start_cfi_raw.split(':')[0]
-            # 2. Split by slash, filter empty
             parts = [int(x) for x in path_only.split('/') if x.isdigit()]
             start_cfi_tuple = tuple(parts)
         else:
             print("No 'Start Here' note found. Processing from beginning.")
             start_spine_index = -1 
 
-        pages_to_process = 5 # Default limit or prompt user
+        pages_to_process = 5
         print(f"Processing first {pages_to_process} HTML items (subject to filter)...")
         
-        # Collect text chunks
         chunks = []
         metadatas = []
-        
-        # We need a way to map chunks back to spine items for rewriting
-        # Structure: list of (index, item_id, soup)
         processable_items = []
         
         count = 0
         for i, (item_id, linear) in enumerate(book.spine):
-            # 1. Global skip for previous chapters
+
             if i < start_spine_index:
                 continue
                 
@@ -108,14 +100,13 @@ def main():
             
             soup = BeautifulSoup(item.content, 'html.parser')
             text = soup.get_text()
-            if len(text) < 50: continue # Skip empty/nav pages
+            if len(text) < 50: continue
             
-            # Simple chunking by paragraphs for this demo
             paragraphs = [p for p in soup.find_all('p') if p.get_text().strip()]
             
             skipped_count = 0
             for p_idx, p in enumerate(paragraphs):
-                 # Filter check: "Start Here" logic
+
                  if i == start_spine_index and start_cfi_tuple:
                      p_path = get_element_cfi(p)
                      if p_path:
@@ -125,7 +116,7 @@ def main():
                              skipped_count += 1
                              continue
 
-                 # Store metadata to find specific paragraph later
+
                  chunks.append(p.get_text())
                  metadatas.append({"spine_index": i, "p_index": p_idx, "file_name": item.file_name})
             
@@ -139,7 +130,7 @@ def main():
             print("No text found to process.")
             return
 
-        # Vector Search
+
         print("Initializing Pinecone and embedding text...")
         pc_manager = PineconeManager()
         pc_manager.index_texts(chunks, metadatas)
@@ -147,7 +138,7 @@ def main():
         print(f"Searching for context relevant to: '{TARGET_TEXT}'")
         results = pc_manager.similarity_search(TARGET_TEXT, k=5)
         
-        # LLM Setup
+
         llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=os.getenv("GEMINI_API_KEY"))
         rewrite_prompt = PromptTemplate.from_template(
             "Rewrite the following text, replacing any synonyms of '{target}' with the word '{target}'. "
@@ -156,9 +147,7 @@ def main():
         
         modified = False
         
-        # Process results
-        # To avoid rewriting same paragraph multiple times if it matches multiple queries, we can track IDs
-        # But here we just process the top k unique paragraphs
+
         processed_indices = set()
         
         for res in results:
@@ -167,7 +156,7 @@ def main():
             if unique_id in processed_indices: continue
             
             original_text = res.page_content
-            # Check if target is already there? user wants to replace SYNONYMS
+
             
             print(f"Rewriting matching paragraph in {meta['file_name']}...")
             import time
@@ -175,15 +164,12 @@ def main():
             chain = rewrite_prompt | llm
             rewritten_text = chain.invoke({"target": TARGET_TEXT, "text": original_text}).content.strip()
             
-            # Find the paragraph in the book object to update
-            # We need to re-find the item and soup. 
-            # Optimization: We have processable_items, but we need correct scope.
-            # Let's map spine_index to the item/soup from our list
+
             target_item_data = next((x for x in processable_items if x[0] == int(meta['spine_index'])), None)
             
             if target_item_data:
                 _, item, soup = target_item_data
-                # Find specific paragraph by index (simple approximation)
+
                 paragraphs = [p for p in soup.find_all('p') if p.get_text().strip()]
                 if int(meta['p_index']) < len(paragraphs):
                     p_tag = paragraphs[int(meta['p_index'])]
@@ -192,9 +178,7 @@ def main():
                     modified = True
                     processed_indices.add(unique_id)
                     
-                    # Add highlight immediately for the NEW text
-                    # We need to re-calculate CFI on the modified soup
-                    # Note: We are highlighting the TARGET_TEXT in the modified paragraph
+
                     path_str, _, offsets = calculate_cfi(soup, TARGET_TEXT)
                     if path_str:
                          spine_cfi = (int(meta['spine_index']) + 1) * 2
@@ -216,7 +200,7 @@ def main():
                          print(f"Added highlight for rewritten term in {final_spine_name}")
 
         if modified:
-            # Debug: Check for None content
+
             for it in book.get_items():
                 if it.content is None:
                     print(f"DEBUG WARNING: Item {it.id} ({it.get_type()}) has None content!")
@@ -224,7 +208,7 @@ def main():
             print("Saving modified EPUB...")
             epub.write_epub(epub_path, book)
             
-            # Post-write verification
+
             print("Verifying written file...")
             if os.path.getsize(epub_path) < 1000:
                 raise Exception("Written file is too small (possible corruption).")
@@ -252,8 +236,7 @@ def main():
         except Exception as restore_error:
             print(f"FAILED TO RESTORE BACKUP: {restore_error}")
 
-    # Old logic kept for reference or single search fallback?
-    # For now, we override the loop to prioritize the workflow above.
+
     return
     
     if found:

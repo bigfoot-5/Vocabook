@@ -6,7 +6,6 @@ from matplotlib.figure import Figure
 import numpy as np
 
 DB_PATH = 'vocabook.db'
-
 class StatsWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -20,17 +19,17 @@ class StatsWindow(QWidget):
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
         
-        # Tab 1: Counts
+
         self.fig_counts = Figure()
         self.canvas_counts = FigureCanvas(self.fig_counts)
         self.tabs.addTab(self.canvas_counts, "Card Counts")
         
-        # Tab 2: Future Due
+
         self.fig_due = Figure()
         self.canvas_due = FigureCanvas(self.fig_due)
         self.tabs.addTab(self.canvas_due, "Future Due")
         
-        # Tab 3: Review Intervals
+
         self.fig_intervals = Figure()
         self.canvas_intervals = FigureCanvas(self.fig_intervals)
         self.tabs.addTab(self.canvas_intervals, "Review Intervals")
@@ -39,7 +38,7 @@ class StatsWindow(QWidget):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # 1. State Counts
+
         cursor.execute("SELECT state, COUNT(*) FROM words GROUP BY state")
         state_counts = {0:0, 1:0, 2:0, 3:0}
         for state, count in cursor.fetchall():
@@ -47,12 +46,12 @@ class StatsWindow(QWidget):
             
         self.plot_counts(state_counts)
         
-        # 2. Future Due
+
         cursor.execute("SELECT due FROM words WHERE due IS NOT NULL")
         due_rows = cursor.fetchall()
         self.plot_due(due_rows)
         
-        # 3. Intervals
+
         cursor.execute("SELECT scheduled_days FROM words WHERE scheduled_days > 0")
         intervals = [r[0] for r in cursor.fetchall()]
         self.plot_intervals(intervals)
@@ -67,7 +66,7 @@ class StatsWindow(QWidget):
         sizes = [counts.get(0,0), counts.get(1,0), counts.get(2,0), counts.get(3,0)]
         colors = ['#3399ff', '#ff3333', '#33cc33', '#ff9933'] # Blue, Red, Green, Orange
         
-        # Filter out zero slices to avoid clutter
+
         final_labels = []
         final_sizes = []
         final_colors = []
@@ -89,14 +88,14 @@ class StatsWindow(QWidget):
         self.fig_due.clear()
         ax = self.fig_due.add_subplot(111)
         
-        # Aggregate by day
+
         today = datetime.datetime.now(datetime.timezone.utc).date()
         future_reviews = {}
         
         for (iso_str,) in due_rows:
             try:
                 dt = datetime.datetime.fromisoformat(iso_str)
-                # Ensure UTC awareness if missing (though DB stores ISO)
+
                 if not dt.tzinfo:
                    dt = dt.replace(tzinfo=datetime.timezone.utc)
                 
@@ -110,8 +109,7 @@ class StatsWindow(QWidget):
                 future_reviews[key] = future_reviews.get(key, 0) + 1
             except: pass
             
-        # Prepare Data for plotting
-        # Plot Overdue + Next 30 days
+
         x = ['Overdue'] + [str(i) for i in range(31)]
         y = [future_reviews.get("Overdue", 0)] + [future_reviews.get(i, 0) for i in range(31)]
         
@@ -120,7 +118,7 @@ class StatsWindow(QWidget):
         ax.set_xlabel("Days from Today")
         ax.set_ylabel("Card Count")
         
-        # Rotate x labels if crowded
+
         
         self.canvas_due.draw()
 

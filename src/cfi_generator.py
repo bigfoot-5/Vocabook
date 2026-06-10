@@ -19,8 +19,7 @@ def get_node_index(node):
         
         if child.name: # Tag
             siblings.append(child)
-        elif str(child).strip() or True: 
-            # Count logical text nodes
+        elif str(child).strip() or True:
             siblings.append(child)
             
     try:
@@ -40,8 +39,7 @@ def get_node_index(node):
         return None
 
 def calculate_cfi(soup, target_text):
-    # Find text node
-    # RESTRICTION: Search only within the <body> tag to avoid metadata matches
+
     search_root = soup.body if soup.body else soup
     
     text_node = search_root.find(string=lambda t: t and target_text in t)
@@ -52,11 +50,10 @@ def calculate_cfi(soup, target_text):
     path_steps = []
     current = text_node
     
-    # We build path upwards
+
     while current.parent:
         parent = current.parent
         if parent.name == '[document]':
-            # Root element (html) usually index 2
             path_steps.append("2")
             break
             
@@ -69,7 +66,7 @@ def calculate_cfi(soup, target_text):
     path_steps.reverse()
     path_str = "/" + "/".join(path_steps)
     
-    # Calculate offset
+
     start_offset = text_node.find(target_text)
     end_offset = start_offset + len(target_text)
     
@@ -85,7 +82,7 @@ def get_element_cfi(element):
     path_steps = []
     current = element
     
-    # We build path upwards
+
     while current.parent:
         parent = current.parent
         if parent.name == '[document]':

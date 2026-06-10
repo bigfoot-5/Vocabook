@@ -1,8 +1,7 @@
 import sqlite3
 import os
 
-# Use absolute path or relative to execution? User uses relative 'vocabook.db' usually.
-# Assuming run from project root.
+
 DB_PATH = 'vocabook.db'
 
 def setup_database():
@@ -10,8 +9,7 @@ def setup_database():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Schema definitions
-    # Added IF NOT EXISTS to prevent errors if running multiple times
+
     schemas = [
         """
         CREATE TABLE IF NOT EXISTS words (
@@ -55,7 +53,7 @@ def setup_database():
     for schema in schemas:
         try:
             cursor.execute(schema)
-            # Extract table name for logging
+
             table_name_start = schema.find("TABLE IF NOT EXISTS") + len("TABLE IF NOT EXISTS")
             table_name_end = schema.find("(", table_name_start)
             table_name = schema[table_name_start:table_name_end].strip()

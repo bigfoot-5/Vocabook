@@ -29,6 +29,7 @@ dependencies = [
     "matplotlib",
     "langgraph",
     "pandas",
+    "sqlalchemy",
 ]
 
 [project.optional-dependencies]
