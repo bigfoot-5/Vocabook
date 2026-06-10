@@ -2,9 +2,7 @@ Metadata-Version: 2.4
 Name: vocabook
 Version: 0.1.0
 Summary: Master vocabulary seamlessly within your Calibre e-book library using FSRS & AI
-```
-Author-email: karthik.talluri@gmail.com
-```
+Author-email: Karthik Talluri <karthik.talluri@gmail.com>
 License: MIT
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
@@ -23,7 +21,105 @@ Requires-Dist: python-dateutil
 Requires-Dist: numpy
 Requires-Dist: matplotlib
 Requires-Dist: langgraph
+Requires-Dist: pandas
+Requires-Dist: sqlalchemy
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: black; extra == "dev"
 Requires-Dist: flake8; extra == "dev"
+
+<div align="center">
+  <h1>📚 Vocabook</h1>
+  <p><strong>Master vocabulary seamlessly within your Calibre e-book library using FSRS & AI.</strong></p>
+
+  ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+  ![License](https://img.shields.io/badge/license-MIT-green)
+  ![FSRS Powered](https://img.shields.io/badge/Spaced_Repetition-FSRS_v4-orange)
+</div>
+
+<br />
+
+**Vocabook** is an advanced vocabulary learning tool designed to integrate seamlessly with your Calibre e-book library. It leveraged spaced repetition (FSRS) and Google's Gemini AI to help you learn and retain vocabulary effectively while reading your e-books.
+
+---
+
+## 🚀 Installation
+
+For now, the installation requires cloning the repository and setting up your environment variables.
+
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/yourusername/vocabook.git
+    cd vocabook
+    ```
+
+2.  **Install Dependencies**:
+    ```bash
+    pip install -e .
+    ```
+
+3.  **Set up standard Environment Variables**:
+    Create a `.env` file in the root of the project directory. Currently, the application is configured to use the Gemini AI API, so you must add your API key here.
+    ```env
+    # .env
+    GEMINI_API_KEY=your_gemini_api_key_here
+    LIBRARY_PATH=/path/to/your/Calibre Library
+    ```
+
+## 🗄️ Filling the Words Database
+
+Before jumping into your books, you should populate the internal application database (`vocabook.db`) with the set of words you want to study. 
+
+You can accomplish this by preparing a **CSV file** and importing it into the system.
+
+### CSV Structure
+The CSV file must contain a clear, tabular list mapping words directly to their definitions. The required structure requires at minimum:
+*   A `word` column (the vocabulary word you want to learn).
+*   A `definition` column (the meaning of the word).
+
+*(Example `words.csv` preview:)*
+```csv
+word,definition
+aberrant,deviating from the ordinary or normal type.
+capricious,subject to, led by, or indicative of a sudden, odd notion or unpredictable change.
+```
+
+**Loading into Vocabook:**
+Once your CSV is built, run your import script (e.g. `src/import_gre.py` or equivalent database population script) to load the vocabulary into the main `vocabook.db` tracking database. FSRS records will be initialized for every imported word.
+
+## 📖 Usage & Interface
+
+Launch the application interface using:
+```bash
+python3 app.py
+```
+
+Vocabook operates on a "Dual Workflow" design—you process sections you **just finished reading**, and prepare sections you are **about to read**. 
+
+![Vocabook UI](assets/images/frontend.jpg)
+
+### What the Buttons Do
+*   **Select Book**: Contains a dropdown list compiled directly from your local Calibre library structure. Pick your target e-book.
+
+### 1. History Bookmarks (Reviewing Past Reading)
+After reading a section of your book in Calibre, return to the application to sync your spaced-repetition progress. While reading inside Calibre, if you encounter a highlighted vocabulary word:
+*   Highlight it in **Yellow** if you forgot it or found it tough.
+*   Leave it in the standard color or highlight it differently if you knew it well.
+
+**Controls:**
+*   **Start After / Stop Before**: Identify the bookmark ranges that you *just finished reading*.
+*   **Sync Reviews (Colors -> FSRS)**: Clicking this button scans your newly finished reading section. It evaluates all the highlight colors you applied inside Calibre and officially updates the internal FSRS logic.  
+*(Yellow highlights log an "Again/Forgot" grade, other highlights log a "Good/Remembered" grade).*
+
+### 2. Future Bookmarks (Preparing Next Reading)
+Before you start a new chapter, Vocabook will inject helpful definitions into the upcoming text so you can learn contextually.
+
+**Controls:**
+*   **Start After / Stop Before**: Identify the bookmark bounds for the *next* block of text you intend to read.
+*   **AI Settings (Token Ratio, Overlap, Targeting)**: Configure how the Gemini AI models the text constraints.
+*   **Inject & Highlight (AI)**: When clicked, the application will scan your upcoming reading layout. It matches text against your `vocabook.db` vocabulary tracker, queries Gemini AI for contextual definitions, and dynamically embeds non-intrusive annotations/highlights back into the Calibre book file. Tough words might appear Red, known words Green.
+
+### 3. Tools Panel
+*   **Browse DB**: Opens a viewer for `vocabook.db` allowing you directly view what words exist, their definitions, and their current FSRS stages (stability, review dates, etc).
+*   **Stats**: View your vocabulary learning charts.
+*   **Reset All**: Use with caution. Clears progress or internal database elements.

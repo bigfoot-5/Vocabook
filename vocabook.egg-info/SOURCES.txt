@@ -1,3 +1,4 @@
+README.md
 pyproject.toml
 src/Vocab_matcher.py
 src/__init__.py
@@ -12,6 +13,8 @@ src/epub_injector.py
 src/epub_utils.py
 src/fsrs_manager.py
 src/import_gre.py
+src/init_db.py
+src/models.py
 src/review_sync.py
 src/scan_helper.py
 src/stats_window.py

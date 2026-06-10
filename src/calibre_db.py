@@ -73,7 +73,6 @@ class CalibreDB:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # We need to fetch all highlights and check 'notes' field in JSON
         cursor.execute("SELECT annot_data FROM annotations WHERE book=? AND annot_type='highlight'", (book_id,))
         rows = cursor.fetchall()
         conn.close()
@@ -82,7 +81,6 @@ class CalibreDB:
             try:
                 data = json.loads(row[0])
                 if data.get('notes') == note_text:
-                    # Found it!
                     return data.get('spine_index'), data.get('start_cfi')
             except:
                 continue
@@ -126,7 +124,6 @@ class CalibreDB:
             for row in rows:
                 try:
                     data = json.loads(row[0])
-                    # Inject timestamp from DB if not in data (though it usually is)
                     data['db_timestamp'] = row[1]
                     highlights.append(data)
                 except:
@@ -150,9 +147,7 @@ class CalibreDB:
             for row in rows:
                 try:
                     data = json.loads(row[0])
-                    # Extract Data
                     text = data.get('highlighted_text', data.get('text', ''))
-                    # Color is nested: style -> which (e.g. "green", "blue")
                     style = data.get('style', {})
                     color = style.get('which', 'unknown')
                     timestamp = data.get('timestamp')
@@ -205,7 +200,6 @@ class CalibreDB:
                 try:
                     data = json.loads(row[0])
                     
-                    # Schema 1: Highlight-style
                     if 'start_cfi' in data:
                         bookmarks.append({
                             'uuid': data.get('uuid', ''),
@@ -214,21 +208,12 @@ class CalibreDB:
                             'spine_index': data.get('spine_index', 0),
                             'timestamp': data.get('timestamp')
                         })
-                    # Schema 2: Bookmark-style
                     elif 'pos' in data:
                         cfi = data.get('pos')
-                        # Extract spine index from CFI if possible
-                        # cfi like "epubcfi(/18/2/...)"
-                        # spine index roughly (18 - 2) / 2 ? Or just parse 18.
-                        # We use a helper or just 0 if unknown.
                         spine_idx = 0
                         clean_cfi = cfi.replace("epubcfi(", "").replace(")", "")
                         parts = clean_cfi.split('/')
                         if len(parts) > 1 and parts[1].isdigit():
-                             # /2 is root, /4 is spine 0? 
-                             # Actually usually: /2/spine_idx_step...
-                             # If it is /18 => (18/2) - 1 = 8? 
-                             # Let's just use the raw int for sorting.
                              spine_idx = int(parts[1])
                         
                         bookmarks.append({
@@ -243,7 +228,6 @@ class CalibreDB:
                     print(f"Skipping bad bookmark row: {loop_e}")
                     continue
                     
-            # Sort by spine_index, then start_cfi
             bookmarks.sort(key=lambda x: (x['spine_index'], x['start_cfi']))
             
         except Exception as e:

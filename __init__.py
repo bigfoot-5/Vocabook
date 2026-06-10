@@ -16,24 +16,19 @@ def clean_html(raw_html):
 
 def read_epub(path):
     with zipfile.ZipFile(path, 'r') as epub:
-        # Find the OPF file
         container_xml = epub.read('META-INF/container.xml')
         root = ET.fromstring(container_xml)
         opf_path = root.find('.//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile').attrib['full-path']
         
-        # Read the OPF file to find the spine
         opf_data = epub.read(opf_path)
         opf_root = ET.fromstring(opf_data)
         
-        # Namespace map often needed
         ns = {'opf': 'http://www.idpf.org/2007/opf'}
         
-        # Get the manifest to map ids to hrefs
         manifest = {}
         for item in opf_root.findall('.//opf:item', ns):
             manifest[item.attrib['id']] = item.attrib['href']
             
-        # Get the first few items in spine
         spine = opf_root.find('.//opf:spine', ns)
         count = 0
         for itemref in spine.findall('.//opf:itemref', ns):
@@ -42,7 +37,6 @@ def read_epub(path):
             href = manifest.get(idref)
             
             if href:
-                # Resolve path relative to OPF
                 if '/' in opf_path:
                     base_dir = opf_path.rsplit('/', 1)[0]
                     full_href = f"{base_dir}/{href}"
@@ -76,8 +70,6 @@ def highlight_epub(src_path, dest_path, target_text, replacement_html):
 if formats:
     epub_path = db.format(book_id, 'EPUB', as_path=True)
     if epub_path:
-        # print(f"Reading from: {epub_path}")
-        # read_epub(epub_path)
         
         output_path = '/Users/karthiktalluri/Desktop/Coding/Vocabook/modified_book.epub'
         target = "Simon &amp; Schuster"

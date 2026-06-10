@@ -31,11 +31,11 @@ class FSRSManager:
         else:
             return None
             
-        # Ensure timezone aware
+
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=datetime.timezone.utc)
         else:
-            # Convert to UTC if it has a different timezone
+
             dt = dt.astimezone(datetime.timezone.utc)
             
         return dt
@@ -62,17 +62,17 @@ class FSRSManager:
         wid, due, stab, diff, elp, sch, reps, laps, state_val, last_rev = row
         
         card = Card()
-        # Handle new cards (null fields)
+
         if stab is not None:
             card.stability = stab
             card.difficulty = diff
             card.state = State(state_val)
             
-            # Timestamps
+
             card.due = self._ensure_utc(due)
             card.last_review = self._ensure_utc(last_rev)
             
-        # Return DB state + FSRS Card
+
         state_data = {
             'card': card,
             'reps': reps if reps else 0,
@@ -104,7 +104,7 @@ class FSRSManager:
         old_reps = state_data['reps']
         old_lapses = state_data['lapses']
         
-        # Sanity check
+
         if old_card.last_review and review_time <= old_card.last_review:
             return
 
@@ -114,7 +114,7 @@ class FSRSManager:
             print(f"Invalid rating {rating_val} for word '{word}'")
             return
 
-        # Calculate input for DB (Time since last review)
+
         elapsed_days = 0
         if old_card.last_review:
             elapsed_days = (review_time - old_card.last_review).days
@@ -122,13 +122,13 @@ class FSRSManager:
         try:
             updated_card, review_log = self.scheduler.review_card(old_card, rating, review_time)
             
-            # Update Counters
+
             new_reps = old_reps + 1
             new_lapses = old_lapses
             if rating == Rating.Again:
                 new_lapses += 1
                 
-            # Calculate Interval (Scheduled Days)
+
             scheduled_days = 0
             if updated_card.due:
                 scheduled_days = (updated_card.due - review_time).days
@@ -144,7 +144,7 @@ class FSRSManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Update word state
+
         cursor.execute("""
             UPDATE words SET
                 due = ?,
@@ -170,7 +170,7 @@ class FSRSManager:
             wid
         ))
         
-        # Log Review
+
         cursor.execute("""
             INSERT INTO review_logs 
             (word_id, rating, scheduled_days, elapsed_days, review_date, state)
@@ -181,7 +181,7 @@ class FSRSManager:
             scheduled_days,
             elapsed_days,
             review_time.isoformat(),
-            int(old_state_val) # Log state BEFORE review
+            int(old_state_val)
         ))
         
         conn.commit()
@@ -198,12 +198,11 @@ class FSRSManager:
         cursor = conn.cursor()
         
         try:
-            # 1. Clear Review Logs
+
             cursor.execute("DELETE FROM review_logs")
             print("Deleted all review logs.")
             
-            # 2. Reset Words Table
-            # Set state=0 (New), purity=0? (not used), others to NULL/0
+
             cursor.execute("""
                 UPDATE words SET
                     due = NULL,

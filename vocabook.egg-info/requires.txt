@@ -13,6 +13,8 @@ python-dateutil
 numpy
 matplotlib
 langgraph
+pandas
+sqlalchemy
 
 [dev]
 pytest
